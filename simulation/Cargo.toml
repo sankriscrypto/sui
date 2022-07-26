@@ -1,0 +1,13 @@
+[package]
+name = "sui-simulation"
+version = "0.0.1"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+sui = { path = "../crates/sui" }
+madsim = { version = "0.2.0-alpha.3", path = "/Users/mlogan/dev/madsim-fork/madsim" }
+
+[patch.crates-io]
+tokio = { path = "/Users/mlogan/dev/madsim-fork/madsim-tokio" }
