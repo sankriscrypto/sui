@@ -5,10 +5,17 @@ use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use prometheus::{Registry, TextEncoder};
 use std::net::SocketAddr;
 
+use tracing::warn;
+
 const METRICS_ROUTE: &str = "/metrics";
 
 pub fn start_prometheus_server(addr: SocketAddr) -> Registry {
     let registry = Registry::new();
+
+    if cfg!(madsim) {
+        warn!("not starting prometheus server in simulator");
+        return registry;
+    }
 
     let app = Router::new()
         .route(METRICS_ROUTE, get(metrics))

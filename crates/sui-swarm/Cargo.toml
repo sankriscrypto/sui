@@ -25,3 +25,6 @@ workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
+
+[target.'cfg(madsim)'.dependencies]
+madsim = { path = "../../../madsim-fork/madsim" }

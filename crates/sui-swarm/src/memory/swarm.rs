@@ -17,6 +17,10 @@ use sui_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
 use tempfile::TempDir;
 
+use tracing::warn;
+
+use tap::TapFallible;
+
 pub struct SwarmBuilder<R = OsRng> {
     rng: R,
     // template: NodeConfig,
@@ -164,7 +168,9 @@ impl Swarm {
             .map(|node| node.spawn())
             .collect::<Result<Vec<_>>>()?;
 
-        try_join_all(start_handles).await?;
+        try_join_all(start_handles)
+            .await
+            .tap_err(|e| warn!("{}", e))?;
 
         Ok(())
     }

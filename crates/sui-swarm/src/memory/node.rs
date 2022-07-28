@@ -8,7 +8,16 @@ use sui_config::NodeConfig;
 use sui_node::SuiNode;
 use sui_types::base_types::SuiAddress;
 use tap::TapFallible;
-use tracing::{error, trace};
+use tracing::{error, info, trace};
+
+#[cfg(madsim)]
+use madsim;
+
+#[cfg(madsim)]
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    sync::atomic::{AtomicU8, Ordering},
+};
 
 /// A handle to an in-memory Sui Node.
 ///
@@ -111,7 +120,7 @@ impl std::error::Error for HealthCheckError {}
 
 #[derive(Debug)]
 struct Container {
-    thread: Option<thread::JoinHandle<()>>,
+    join_handle: Option<thread::JoinHandle<()>>,
     cancel_sender: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
@@ -120,14 +129,14 @@ impl Drop for Container {
     fn drop(&mut self) {
         trace!("dropping Container");
 
-        let thread = self.thread.take().unwrap();
+        let join_handle = self.join_handle.take().unwrap();
         let cancel_handle = self.cancel_sender.take().unwrap();
 
         // Notify the thread to shutdown
         let _ = cancel_handle.send(());
 
         // Wait for the thread to join
-        thread.join().unwrap();
+        join_handle.join().unwrap();
 
         trace!("finished dropping Container");
     }
@@ -139,58 +148,100 @@ impl Container {
         config: NodeConfig,
         runtime: RuntimeType,
     ) -> (tokio::sync::oneshot::Receiver<()>, Self) {
+        println!("spawn: {:#?}", config);
         let (startup_sender, startup_reciever) = tokio::sync::oneshot::channel();
         let (cancel_sender, cancel_reciever) = tokio::sync::oneshot::channel();
 
-        let thread = thread::spawn(move || {
-            let span = tracing::span!(
-                tracing::Level::INFO,
-                "node",
-                name =% config.sui_address()
-            );
-            let _guard = span.enter();
+        let inner_config = config.clone();
+        let server = async move {
+            let config = inner_config;
+            let _server = SuiNode::start(&config).await.unwrap();
+            // Notify that we've successfully started the node
+            let _ = startup_sender.send(());
+            // run until canceled
+            cancel_reciever.map(|_| ()).await;
 
-            let mut builder = match runtime {
-                RuntimeType::SingleThreaded => tokio::runtime::Builder::new_current_thread(),
-                RuntimeType::MultiThreaded => {
-                    thread_local! {
-                        static SPAN: std::cell::RefCell<Option<tracing::span::EnteredSpan>> =
-                            std::cell::RefCell::new(None);
-                    }
-                    let mut builder = tokio::runtime::Builder::new_multi_thread();
-                    let span = span.clone();
-                    builder
-                        .on_thread_start(move || {
-                            SPAN.with(|maybe_entered_span| {
-                                *maybe_entered_span.borrow_mut() = Some(span.clone().entered());
-                            });
-                        })
-                        .on_thread_stop(|| {
-                            SPAN.with(|maybe_entered_span| {
-                                maybe_entered_span.borrow_mut().take();
-                            });
-                        });
+            trace!("cancellation received; shutting down thread");
+        };
 
-                    builder
-                }
-            };
-            let runtime = builder.enable_all().build().unwrap();
+        let join_handle = if cfg!(madsim) {
+            let handle = madsim::runtime::Handle::current();
+            let builder = handle.create_node();
 
-            runtime.block_on(async move {
-                let _server = SuiNode::start(&config).await.unwrap();
-                // Notify that we've successfully started the node
-                let _ = startup_sender.send(());
-                // run until canceled
-                cancel_reciever.map(|_| ()).await;
+            static NEXT_IP_LOW_OCTET: AtomicU8 = AtomicU8::new(0);
 
-                trace!("cancellation received; shutting down thread");
+            let low_octet = NEXT_IP_LOW_OCTET.fetch_add(1, Ordering::SeqCst);
+
+            if low_octet >= 254 {
+                // TODO: support more than one octet
+                panic!("out of IPs");
+            }
+
+            let node = builder
+                .ip(IpAddr::V4(Ipv4Addr::new(10, 10, 0, low_octet)))
+                .name(format!("{}", config.public_key()))
+                .init(|| async {
+                    info!("node restarted");
+                })
+                .build();
+
+            let (tx, rx) = tokio::sync::oneshot::channel();
+
+            node.spawn(async move {
+                server.await;
+                tx.send(()).unwrap();
             });
-        });
+
+            let thread = thread::spawn(move || {
+                rx.blocking_recv().unwrap();
+            });
+
+            thread
+        } else {
+            let thread = thread::spawn(move || {
+                let span = tracing::span!(
+                    tracing::Level::INFO,
+                    "node",
+                    name =% config.sui_address()
+                );
+                let _guard = span.enter();
+
+                let mut builder = match runtime {
+                    RuntimeType::SingleThreaded => tokio::runtime::Builder::new_current_thread(),
+                    RuntimeType::MultiThreaded => {
+                        thread_local! {
+                            static SPAN: std::cell::RefCell<Option<tracing::span::EnteredSpan>> =
+                                std::cell::RefCell::new(None);
+                        }
+                        let mut builder = tokio::runtime::Builder::new_multi_thread();
+                        let span = span.clone();
+                        builder
+                            .on_thread_start(move || {
+                                SPAN.with(|maybe_entered_span| {
+                                    *maybe_entered_span.borrow_mut() = Some(span.clone().entered());
+                                });
+                            })
+                            .on_thread_stop(|| {
+                                SPAN.with(|maybe_entered_span| {
+                                    maybe_entered_span.borrow_mut().take();
+                                });
+                            });
+
+                        builder
+                    }
+                };
+                let runtime = builder.enable_all().build().unwrap();
+
+                runtime.block_on(server);
+            });
+
+            thread
+        };
 
         (
             startup_reciever,
             Self {
-                thread: Some(thread),
+                join_handle: Some(join_handle),
                 cancel_sender: Some(cancel_sender),
             },
         )
