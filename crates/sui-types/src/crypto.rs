@@ -7,6 +7,10 @@ use std::str::FromStr;
 use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
+use narwhal_crypto::bls12381::{
+    BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
+    BLS12381Signature,
+};
 use narwhal_crypto::ed25519::{
     Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
     Ed25519Signature,
@@ -35,12 +39,19 @@ pub use enum_dispatch::enum_dispatch;
 
 // Comment the one you want to use
 
-// Authority Objects
-pub type AuthorityKeyPair = Ed25519KeyPair;
-pub type AuthorityPrivateKey = Ed25519PrivateKey;
-pub type AuthorityPublicKey = Ed25519PublicKey;
-pub type AuthoritySignature = Ed25519Signature;
-pub type AggregateAuthoritySignature = Ed25519AggregateSignature;
+// BLS
+pub type AuthorityKeyPair = BLS12381KeyPair;
+pub type AuthorityPrivateKey = BLS12381PrivateKey;
+pub type AuthorityPublicKey = BLS12381PublicKey;
+pub type AuthoritySignature = BLS12381Signature;
+pub type AggregateAuthoritySignature = BLS12381AggregateSignature;
+
+// // Authority Objects
+// pub type AuthorityKeyPair = Ed25519KeyPair;
+// pub type AuthorityPrivateKey = Ed25519PrivateKey;
+// pub type AuthorityPublicKey = Ed25519PublicKey;
+// pub type AuthoritySignature = Ed25519Signature;
+// pub type AggregateAuthoritySignature = Ed25519AggregateSignature;
 
 // Account Objects
 pub type AccountKeyPair = Ed25519KeyPair;
@@ -388,12 +399,12 @@ impl SuiSignatureInner for Secp256k1SuiSignature {
     const LENGTH: usize = Secp256k1PublicKey::LENGTH + Secp256k1Signature::LENGTH + 1;
 }
 
-// impl Default for Secp256k1SuiSignature {
-//     []
-// }
-
 impl SuiPublicKey for Secp256k1PublicKey {
-    const FLAG: u8 = 0xed;
+    const FLAG: u8 = 0x01;
+}
+
+impl SuiPublicKey for BLS12381PublicKey {
+    const FLAG: u8 = 0x02;
 }
 
 impl AsRef<[u8]> for Secp256k1SuiSignature {
@@ -905,6 +916,7 @@ impl ToObligationSignature for AuthoritySignature {
 // Careful, the implementation may be overlapping with the AuthoritySignature implementation. Be sure to fix it if it does:
 // TODO: Change all these into macros.
 impl ToObligationSignature for Secp256k1Signature {}
+impl ToObligationSignature for Ed25519Signature {}
 
 #[derive(Default)]
 pub struct VerificationObligation {
@@ -966,8 +978,11 @@ impl VerificationObligation {
 
     pub fn verify_all(self) -> SuiResult<()> {
         AggregateAuthoritySignature::batch_verify(
-            &self.signatures[..],
-            &self.public_keys.iter().map(|x| &x[..]).collect::<Vec<_>>(),
+            &self.signatures.iter().collect::<Vec<_>>()[..],
+            self.public_keys
+                .iter()
+                .map(|x| x.iter())
+                .collect::<Vec<_>>(),
             &self.messages.iter().map(|x| &x[..]).collect::<Vec<_>>()[..],
         )
         .map_err(|error| SuiError::InvalidSignature {

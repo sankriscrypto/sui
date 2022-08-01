@@ -11,7 +11,7 @@ async-trait = "0.1.57"
 rayon = "1.5.3"
 anyhow = { version = "1.0.57", features = ["backtrace"] }
 futures = "0.3.21"
-serde = { version = "1.0.140", features = ["derive"] }
+serde = { version = "1.0.141", features = ["derive"] }
 serde_json = "1.0.80"
 tempfile = "3.3.0"
 tokio = { version = "1.20.1", features = ["full"] }
@@ -38,7 +38,7 @@ sui-types = { path = "../sui-types" }
 sui-sdk = { path = "../sui-sdk" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "node" }
+narwhal-node = { git = "https://github.com/punwai/narwhal-1", rev = "dbecf46841ecd84aa1c7829944b743f15a471ae1", package = "node" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-node = { path = "../sui-node" }
 workspace-hack = { path = "../workspace-hack"}
