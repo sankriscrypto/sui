@@ -523,25 +523,25 @@ pub struct TransactionEnvelope<S> {
 }
 
 impl<S> TransactionEnvelope<S> {
-    fn add_sender_sig_to_verification_obligation(
-        &self,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_verified || self.data.kind.is_system_tx() {
-            return Ok(());
-        }
+    // fn add_sender_sig_to_verification_obligation(
+    //     &self,
+    //     obligation: &mut VerificationObligation,
+    //     idx: usize,
+    // ) -> SuiResult<()> {
+    //     // We use this flag to see if someone has checked this before
+    //     // and therefore we can skip the check. Note that the flag has
+    //     // to be set to true manually, and is not set by calling this
+    //     // "check" function.
+    //     if self.is_verified || self.data.kind.is_system_tx() {
+    //         return Ok(());
+    //     }
 
-        self.tx_signature.add_to_verification_obligation_or_verify(
-            self.data.sender,
-            obligation,
-            idx,
-        )
-    }
+    //     self.tx_signature.add_to_verification_obligation_or_verify(
+    //         self.data.sender,
+    //         obligation,
+    //         idx,
+    //     )
+    // }
 
     pub fn verify_sender_signature(&self) -> SuiResult<()> {
         if self.is_verified || self.data.kind.is_system_tx() {
@@ -742,12 +742,7 @@ impl SignedTransaction {
 
         let idx = obligation.add_message(&self.data);
 
-        if self
-            .add_sender_sig_to_verification_obligation(&mut obligation, idx)
-            .is_err()
-        {
-            self.verify_sender_signature()?;
-        }
+        self.verify_sender_signature()?;
 
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
@@ -1718,12 +1713,7 @@ impl CertifiedTransaction {
         let idx = obligation.add_message(&self.data);
 
         // Add the obligation of the sender signature verification.
-        if self
-            .add_sender_sig_to_verification_obligation(&mut obligation, idx)
-            .is_err()
-        {
-            self.verify_sender_signature()?;
-        }
+        self.verify_sender_signature()?;
 
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;

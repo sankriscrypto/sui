@@ -46,7 +46,7 @@ pub type AuthorityPublicKey = BLS12381PublicKey;
 pub type AuthoritySignature = BLS12381Signature;
 pub type AggregateAuthoritySignature = BLS12381AggregateSignature;
 
-// // Authority Objects
+// Authority Objects
 // pub type AuthorityKeyPair = Ed25519KeyPair;
 // pub type AuthorityPrivateKey = Ed25519PrivateKey;
 // pub type AuthorityPublicKey = Ed25519PublicKey;
@@ -497,12 +497,12 @@ pub trait SuiSignature: Sized + signature::Signature {
     where
         T: Signable<Vec<u8>>;
 
-    fn add_to_verification_obligation_or_verify(
-        &self,
-        author: SuiAddress,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()>;
+    // fn add_to_verification_obligation_or_verify(
+    //     &self,
+    //     author: SuiAddress,
+    //     obligation: &mut VerificationObligation,
+    //     idx: usize,
+    // ) -> SuiResult<()>;
 }
 
 impl<S: SuiSignatureInner + Sized> SuiSignature for S {
@@ -520,24 +520,24 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
             })
     }
 
-    fn add_to_verification_obligation_or_verify(
-        &self,
-        author: SuiAddress,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()> {
-        let (sig, pk) = self.get_verification_inputs(author)?;
-        match obligation.add_signature_and_public_key(sig.clone(), pk.clone(), idx) {
-            Ok(_) => Ok(()),
-            Err(err) => {
-                let msg = &obligation.messages[idx][..];
-                pk.verify(msg, &sig)
-                    .map_err(|_| SuiError::InvalidSignature {
-                        error: err.to_string(),
-                    })
-            }
-        }
-    }
+    // fn add_to_verification_obligation_or_verify(
+    //     &self,
+    //     author: SuiAddress,
+    //     obligation: &mut VerificationObligation,
+    //     idx: usize,
+    // ) -> SuiResult<()> {
+    //     let (sig, pk) = self.get_verification_inputs(author)?;
+    //     match obligation.add_signature_and_public_key(sig.clone(), &pk, idx) {
+    //         Ok(_) => Ok(()),
+    //         Err(err) => {
+    //             let msg = &obligation.messages[idx][..];
+    //             pk.verify(msg, &sig)
+    //                 .map_err(|_| SuiError::InvalidSignature {
+    //                     error: err.to_string(),
+    //                 })
+    //         }
+    //     }
+    // }
 
     fn signature_bytes(&self) -> &[u8] {
         &self.as_ref()[1..1 + S::Sig::LENGTH]
@@ -597,10 +597,10 @@ impl PartialEq for AuthoritySignInfo {
 }
 
 impl AuthoritySignInfo {
-    pub fn add_to_verification_obligation(
+    pub fn add_to_verification_obligation<'a, 'b: 'a>(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
+        committee: &'b Committee,
+        obligation: &mut VerificationObligation<'a>,
         message_index: usize,
     ) -> SuiResult<()> {
         let weight = committee.weight(&self.authority);
@@ -629,6 +629,7 @@ impl AuthoritySignInfo {
         let mut obligation = VerificationObligation::default();
         let idx = obligation.add_message(data);
         self.add_to_verification_obligation(committee, &mut obligation, idx)?;
+
         obligation.verify_all()?;
         Ok(())
     }
@@ -725,10 +726,10 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         self.signers_map.is_empty()
     }
 
-    pub fn add_to_verification_obligation(
+    pub fn add_to_verification_obligation<'a, 'b: 'a>(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
+        committee: &'b Committee,
+        obligation: &mut VerificationObligation<'a>,
         message_index: usize,
     ) -> SuiResult<()> {
         // Check epoch
@@ -919,14 +920,14 @@ impl ToObligationSignature for Secp256k1Signature {}
 impl ToObligationSignature for Ed25519Signature {}
 
 #[derive(Default)]
-pub struct VerificationObligation {
+pub struct VerificationObligation<'a>{
     pub messages: Vec<Vec<u8>>,
     pub signatures: Vec<AggregateAuthoritySignature>,
-    pub public_keys: Vec<Vec<AuthorityPublicKey>>,
+    pub public_keys: Vec<Vec<&'a AuthorityPublicKey>>,
 }
 
-impl VerificationObligation {
-    pub fn new() -> VerificationObligation {
+impl<'a> VerificationObligation<'a> {
+    pub fn new() -> VerificationObligation<'a> {
         VerificationObligation {
             ..Default::default()
         }
@@ -947,41 +948,41 @@ impl VerificationObligation {
         self.messages.len() - 1
     }
 
-    // Attempts to add signature and public key to the obligation. If this fails, ensure to call `verify` manually.
-    pub fn add_signature_and_public_key<
-        S: ToObligationSignature + Authenticator<PubKey = P>,
-        P: VerifyingKey<Sig = S>,
-    >(
-        &mut self,
-        signature: S,
-        public_key: P,
-        idx: usize,
-    ) -> SuiResult<()> {
-        match signature.to_obligation_signature(&public_key) {
-            ObligationSignature::AuthoritySig((sig, pubkey)) => {
-                self.public_keys
-                    .get_mut(idx)
-                    .ok_or(SuiError::InvalidAuthenticator)?
-                    .push(pubkey.clone());
-                self.signatures
-                    .get_mut(idx)
-                    .ok_or(SuiError::InvalidAuthenticator)?
-                    .add_signature(sig.clone())
-                    .map_err(|_| SuiError::InvalidSignature {
-                        error: "Failed to add signature to obligation".to_string(),
-                    })?;
-                Ok(())
-            }
-            ObligationSignature::None => Err(SuiError::SenderSigUnbatchable),
-        }
-    }
+    // // Attempts to add signature and public key to the obligation. If this fails, ensure to call `verify` manually.
+    // pub fn add_signature_and_public_key<
+    //     S: ToObligationSignature + Authenticator<PubKey = P>,
+    //     P: VerifyingKey<Sig = S>,
+    // >(
+    //     &mut self,
+    //     signature: S,
+    //     public_key: &'a P,
+    //     idx: usize,
+    // ) -> SuiResult<()> {
+    //     match signature.to_obligation_signature(public_key) {
+    //         ObligationSignature::AuthoritySig((sig, pubkey)) => {
+    //             self.public_keys
+    //                 .get_mut(idx)
+    //                 .ok_or(SuiError::InvalidAuthenticator)?
+    //                 .push(pubkey);
+    //             self.signatures
+    //                 .get_mut(idx)
+    //                 .ok_or(SuiError::InvalidAuthenticator)?
+    //                 .add_signature(sig.clone())
+    //                 .map_err(|_| SuiError::InvalidSignature {
+    //                     error: "Failed to add signature to obligation".to_string(),
+    //                 })?;
+    //             Ok(())
+    //         }
+    //         ObligationSignature::None => Err(SuiError::SenderSigUnbatchable),
+    //     }
+    // }
 
     pub fn verify_all(self) -> SuiResult<()> {
         AggregateAuthoritySignature::batch_verify(
             &self.signatures.iter().collect::<Vec<_>>()[..],
             self.public_keys
                 .iter()
-                .map(|x| x.iter())
+                .map(|x| x.iter().map(|&x| x))
                 .collect::<Vec<_>>(),
             &self.messages.iter().map(|x| &x[..]).collect::<Vec<_>>()[..],
         )
