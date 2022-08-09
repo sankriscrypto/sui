@@ -14,7 +14,7 @@ use sui_json_rpc_types::{
     GetObjectDataResponse, TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_sdk::crypto::KeystoreType;
-use sui_types::crypto::SuiSignature;
+use sui_types::messages::Transaction;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
@@ -43,7 +43,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
-    let tx_data: TransactionBytes = http_client
+    let transaction_bytes: TransactionBytes = http_client
         .transfer_object(
             *address,
             objects.first().unwrap().object_id,
@@ -56,13 +56,10 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = KeystoreType::File(keystore_path).init()?;
 
-    let tx_bytes = tx_data.tx_bytes.to_vec()?;
-    let signature = keystore.sign(address, &tx_bytes)?;
+    let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
+    let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
 
-    let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let sig_scheme = signature.scheme();
-    let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
+    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
     let tx_response: TransactionResponse = http_client
         .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
@@ -91,20 +88,17 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     .map(|bytes| Base64::from_bytes(bytes))
     .collect::<Vec<_>>();
 
-    let tx_data: TransactionBytes = http_client
+    let transaction_bytes: TransactionBytes = http_client
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
         .await?;
 
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = KeystoreType::File(keystore_path).init()?;
+    let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
 
-    let tx_bytes = tx_data.tx_bytes.to_vec()?;
-    let signature = keystore.sign(address, &tx_bytes)?;
+    let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
 
-    let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let sig_scheme = signature.scheme();
-    let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
+    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
     let tx_response: TransactionResponse = http_client
         .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
@@ -133,7 +127,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         SuiJsonValue::from_str(&format!("{:#x}", address))?,
     ];
 
-    let tx_data: TransactionBytes = http_client
+    let transaction_bytes: TransactionBytes = http_client
         .move_call(
             *address,
             package_id,
@@ -149,13 +143,11 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = KeystoreType::File(keystore_path).init()?;
 
-    let tx_bytes = tx_data.tx_bytes.to_vec()?;
-    let signature = keystore.sign(address, &tx_bytes)?;
+    let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
 
-    let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let sig_scheme = signature.scheme();
-    let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
+    let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
+
+    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
     let tx_response: TransactionResponse = http_client
         .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
@@ -197,20 +189,18 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     // Make some transactions
     let mut tx_responses = Vec::new();
     for oref in &objects[..objects.len() - 1] {
-        let tx_data: TransactionBytes = http_client
+        let transaction_bytes: TransactionBytes = http_client
             .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
 
         let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
         let keystore = KeystoreType::File(keystore_path).init()?;
 
-        let tx_bytes = tx_data.tx_bytes.to_vec()?;
-        let signature = keystore.sign(address, &tx_bytes)?;
+        let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
 
-        let tx_bytes = Base64::from_bytes(&tx_bytes);
-        let sig_scheme = signature.scheme();
-        let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-        let pub_key = Base64::from_bytes(signature.public_key_bytes());
+        let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
+
+        let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
         let response: TransactionResponse = http_client
             .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)

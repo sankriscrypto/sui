@@ -27,7 +27,7 @@ use sui_json_rpc_types::{
     TransactionEffectsResponse, TransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::crypto::{SignableBytes, SuiSignature};
+use sui_types::crypto::SignableBytes;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
 
@@ -223,18 +223,12 @@ impl SuiClient {
     ) -> anyhow::Result<TransactionResponse> {
         Ok(match &self {
             Self::Http(c) => {
-                let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
-                let flag = tx.tx_signature.scheme();
-                let signature = Base64::from_bytes(tx.tx_signature.signature_bytes());
-                let pub_key = Base64::from_bytes(tx.tx_signature.public_key_bytes());
+                let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
                 c.execute_transaction(tx_bytes, flag, signature, pub_key)
                     .await?
             }
             Self::Ws(c) => {
-                let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
-                let flag = tx.tx_signature.scheme();
-                let signature = Base64::from_bytes(tx.tx_signature.signature_bytes());
-                let pub_key = Base64::from_bytes(tx.tx_signature.public_key_bytes());
+                let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
                 c.execute_transaction(tx_bytes, flag, signature, pub_key)
                     .await?
             }
