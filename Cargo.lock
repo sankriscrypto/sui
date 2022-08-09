@@ -7281,6 +7281,7 @@ dependencies = [
  "serde_json",
  "sha3 0.10.2",
  "signature",
+ "sui-adapter",
  "sui-config",
  "sui-core",
  "sui-json",
