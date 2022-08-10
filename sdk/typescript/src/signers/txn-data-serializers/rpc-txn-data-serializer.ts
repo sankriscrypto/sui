@@ -144,7 +144,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         'sui_publish',
         [
           signerAddress,
-          t.compiledModules,
+          t.compiledModules.map(m => m.toString()),
           t.gasPayment,
           t.gasBudget,
         ],
