@@ -368,6 +368,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                         )}
                         {sender && (
                             <section
+                                data-testid="transaction-sender"
                                 className={cl([
                                     styles.txcomponent,
                                     styles.txsender,
