@@ -40,12 +40,12 @@ impl KeyToolCommand {
     pub fn execute(self, keystore: SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate => {
-                let (_address, keypair): (_, AccountKeyPair) = get_key_pair();
+                let (_address, keypair): (_, AuthorityKeyPair) = get_key_pair();
 
                 let hex = encode_bytes_hex(keypair.public());
                 let file_name = format!("{hex}.key");
                 write_keypair_to_file(&keypair, &file_name)?;
-                println!("Ed25519 key generated and saved to '{file_name}'");
+                println!("BLS12381 key generated and saved to '{file_name}'");
             }
 
             KeyToolCommand::Show { file } => {
