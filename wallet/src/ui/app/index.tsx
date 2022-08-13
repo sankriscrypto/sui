@@ -31,7 +31,6 @@ import { setNavVisibility } from '_redux/slices/app';
 const HIDDEN_MENU_PATHS = ['/stake-new', '/nft-details', '/receipt'];
 
 const App = () => {
-    console.log('rendering');
     const dispatch = useAppDispatch();
     useEffect(() => {
         dispatch(loadAccountFromStorage());
@@ -71,12 +70,19 @@ const App = () => {
             </Route>
 
             <Route
-                path="/connect/*"
+                path="/dapp/*"
                 element={
                     <HomePage disableNavigation limitToPopUpSize={false} />
                 }
             >
-                <Route path=":requestID" element={<SiteConnectPage />} />
+                <Route
+                    path="connect/:requestID"
+                    element={<SiteConnectPage />}
+                />
+                <Route
+                    path="tx-approval/:txID"
+                    element={<DappTxApprovalPage />}
+                />
             </Route>
 
             <Route path="welcome" element={<WelcomePage />} />
@@ -86,7 +92,6 @@ const App = () => {
                 <Route path="import" element={<ImportPage />} />
                 <Route path="backup" element={<BackupPage />} />
             </Route>
-            <Route path="/tx-approval/:txID" element={<DappTxApprovalPage />} />
             <Route
                 path="*"
                 element={<Navigate to="/tokens" replace={true} />}
