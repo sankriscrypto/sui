@@ -49,12 +49,12 @@ pub mod crypto;
 mod transaction_builder;
 
 pub struct SuiClient {
-    api: Arc<SuiClientApi>,
     transaction_builder: TransactionBuilder,
     read_api: Arc<dyn ReadApi + Send + Sync>,
     full_node_api: FullNodeApi,
     event_api: EventApi,
     quorum_driver: Box<dyn QuorumDriver + Sync + Send>,
+    wallet_sync_api: WalletSyncApi,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -94,17 +94,16 @@ impl SuiClient {
 
         let full_node_api = FullNodeApi(api.clone());
         let event_api = EventApi(api.clone());
-        let transaction_builder = TransactionBuilder {
-            read_api: read_api.clone(),
-        };
+        let transaction_builder = TransactionBuilder(read_api.clone());
+        let wallet_sync_api = WalletSyncApi(api);
 
         SuiClient {
-            api,
             transaction_builder,
             read_api,
             full_node_api,
             event_api,
             quorum_driver,
+            wallet_sync_api,
         }
     }
 
@@ -124,17 +123,16 @@ impl SuiClient {
 
         let full_node_api = FullNodeApi(api.clone());
         let event_api = EventApi(api.clone());
-        let transaction_builder = TransactionBuilder {
-            read_api: read_api.clone(),
-        };
+        let transaction_builder = TransactionBuilder(read_api.clone());
+        let wallet_sync_api = WalletSyncApi(api);
 
         SuiClient {
-            api,
             transaction_builder,
             read_api,
             full_node_api,
             event_api,
             quorum_driver,
+            wallet_sync_api,
         }
     }
 }
@@ -370,6 +368,18 @@ impl QuorumDriver for QuorumDriverImpl {
     }
 }
 
+pub struct WalletSyncApi(Arc<SuiClientApi>);
+
+impl WalletSyncApi {
+    pub async fn sync_account_state(&self, address: SuiAddress) -> anyhow::Result<()> {
+        match &*self.0 {
+            SuiClientApi::Rpc(c, _) => c.sync_account_state(address).await?,
+            SuiClientApi::Embedded(c) => c.sync_account_state(address).await?,
+        }
+        Ok(())
+    }
+}
+
 impl SuiClient {
     pub fn transaction_builder(&self) -> &TransactionBuilder {
         &self.transaction_builder
@@ -386,12 +396,8 @@ impl SuiClient {
     pub fn quorum_driver(&self) -> &(dyn QuorumDriver + Sync + Send) {
         &*self.quorum_driver
     }
-    pub async fn sync_client_state(&self, address: SuiAddress) -> anyhow::Result<()> {
-        match &*self.api {
-            SuiClientApi::Rpc(c, _) => c.sync_account_state(address).await?,
-            SuiClientApi::Embedded(c) => c.sync_account_state(address).await?,
-        }
-        Ok(())
+    pub fn wallet_sync_api(&self) -> &WalletSyncApi {
+        &self.wallet_sync_api
     }
 }
 
