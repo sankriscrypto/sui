@@ -1992,6 +1992,14 @@
               "bcs_bytes": {
                 "$ref": "#/components/schemas/Base64"
               },
+              "child_count": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint32",
+                "minimum": 0.0
+              },
               "dataType": {
                 "type": "string",
                 "enum": [
